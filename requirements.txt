@@ -1,0 +1,11 @@
+evalutils==0.2.4
+numpy
+scikit-learn
+scipy
+tqdm==4.62.2
+tifffile==2021.8.8
+imagecodecs==2021.11.20
+#scikit-image
+torch==1.13
+torchvision==0.14
+opencv-python
