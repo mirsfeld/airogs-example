@@ -38,13 +38,18 @@ RUN python -m pip install --user -U pip
 # e.g. `python -m pip install sklearn==...`
 
 COPY --chown=algorithm:algorithm requirements.txt /opt/algorithm/
+COPY --chown=algorithm:algorithm requirements_yolo.txt /opt/algorithm/
 RUN python -m pip install --user --upgrade pip
 RUN python -m pip install --user -rrequirements.txt
+RUN python -m pip install --user -rrequirements_yolo.txt
 RUN python -m pip show imagecodecs
 
 COPY --chown=algorithm:algorithm process.py /opt/algorithm/
-COPY --chown=algorithm:algorithm best_model_fold0.pth /opt/algorithm/best_model_fold0.pth
-COPY --chown=algorithm:algorithm models /opt/algorithm/models
+COPY --chown=algorithm:algorithm weights_full_image.pth /opt/algorithm/weights_full_image.pth
+COPY --chown=algorithm:algorithm weights_cropped_image.pth /opt/algorithm/weights_cropped_image.pth
+COPY --chown=algorithm:algorithm best.pt /opt/algorithm/best.pt
+COPY --chown=algorithm:algorithm classifier_models /opt/algorithm/classifier_models
+COPY --chown=algorithm:algorithm yolov5 /opt/algorithm/yolov5
 
 # Copy additional files, such as model weights
 # e.g. `COPY --chown=algorithm:algorithm weights.pth /opt/algorithm/weights.pth`

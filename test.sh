@@ -10,6 +10,7 @@ export DOCKER_DEFAULT_PLATFORM=linux/amd64
 docker volume create airogs_algorithm-output
 
 docker run --rm \
+        -e PYTHONUNBUFFERED=1 \
         --network none \
         --memory=15g \
         --memory-swap=15g \
@@ -30,12 +31,8 @@ docker run --rm \
         --security-opt="no-new-privileges" \
         --shm-size=128m \
         --pids-limit=256 \
-<<<<<<< HEAD
         python:3.9.2 cat /output/multiple-referable-glaucoma-likelihoods.json /output/multiple-referable-glaucoma-binary.json /output/multiple-ungradability-scores.json /output/multiple-ungradability-binary.json
 
-=======
-        python:3.7-slim cat /output/multiple-referable-glaucoma-likelihoods.json /output/multiple-referable-glaucoma-binary.json /output/multiple-ungradability-scores.json /output/multiple-ungradability-binary.json
->>>>>>> 89f1b0d89365e227aea2163d838759c33396729a
 
 docker run --rm \
         -v airogs_algorithm-output:/output/ \
@@ -47,11 +44,7 @@ docker run --rm \
         --security-opt="no-new-privileges" \
         --shm-size=128m \
         --pids-limit=256 \
-<<<<<<< HEAD
         python:3.9.2 python -c """import json, sys
-=======
-        python:3.7-slim python -c """import json, sys
->>>>>>> 89f1b0d89365e227aea2163d838759c33396729a
 referable_glaucoma_likelihood = json.load(open('/output/multiple-referable-glaucoma-likelihoods.json'))
 referable_glaucoma_binary = json.load(open('/output/multiple-referable-glaucoma-binary.json'))
 ungradability_score = json.load(open('/output/multiple-ungradability-scores.json'))

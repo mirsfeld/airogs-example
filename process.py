@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 from torchvision import transforms, models
 import torchvision.transforms.functional as functional
-import models
+import classifier_models
 from PIL import Image
 
 from evalutils import ClassificationAlgorithm
@@ -20,6 +20,68 @@ from evalutils.validators import (
 )
 from evalutils.io import ImageLoader
 import cv2
+import os
+
+from yolov5.models.common import DetectMultiBackend
+from yolov5.utils.augmentations import letterbox
+from yolov5.utils.general import scale_boxes, non_max_suppression
+from yolov5.utils.plots import save_one_box
+
+def hist_equalization(img):
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
+    img[:,:,0] = cv2.equalizeHist(img[:,:,0])
+    img = cv2.cvtColor(img, cv2.COLOR_LAB2RGB)
+    return img
+
+def run_detection(image, device):
+    original_image = image.copy()
+    image = letterbox(image, new_shape=(640,640))[0].transpose((2,0,1))[::-1]
+    image = np.ascontiguousarray(image)
+    image = torch.from_numpy(image).float()
+    image /=255
+    if len(image.shape)==3:
+        image = image[None]
+    model = DetectMultiBackend(weights='best.pt', device=torch.device(device), dnn=False, data=None, fp16=False)
+    pred_0 = model(image, augment=False, visualize=False)
+    pred = non_max_suppression(pred_0, conf_thres=0.4, max_det=1)
+    det = pred[0]
+    det[:, :4] = scale_boxes(image.shape[2:], det[:, :4], original_image.shape).round()
+    if len(det):
+        *xyxy, conf, cls = reversed(det)[0]
+        print('Confidence yolov5:', conf.item())
+        crop = save_one_box(xyxy, original_image, file='', BGR=False, pad=150, square=True, save=False)
+        return {'crop': crop, 'conf': conf.item(), 'box_detected':True}
+    else:
+        pred = non_max_suppression(pred_0, conf_thres=0.01, max_det=1)
+        det = pred[0]
+        det[:, :4] = scale_boxes(image.shape[2:], det[:, :4], original_image.shape).round()
+        *xyxy, conf, cls = reversed(det)[0]
+        print('Confidence yolov5:', conf.item())
+        return {'crop': original_image, 'conf':conf.item(), 'box_detected':False}
+
+
+
+    # detected, conf, crop = detect_optic_disc(
+    #     weights='best.pt',
+    #     source = image,
+    #     imgsz=(640,640),
+    #     conf_thres=0.4,
+    #     max_det=1,
+    #     save_crop=False,
+    #     save_txt=False,
+    #     project='',
+    #     line_thickness=0,
+    #     hide_conf=True,
+    #     hide_labels=True,
+    #     name='',
+    #     exist_ok=True,
+    #     device=device
+    # )
+    # if detected:
+    #     return image, conf
+    # else:
+    #     crop = hist_equalization(crop)
+    #     return crop, conf
 
 def crop_parameters(img_arr):
     indices_0 = np.where(np.any(img_arr!=0, axis=(1,2)))[0]
@@ -71,9 +133,13 @@ class airogs_algorithm(ClassificationAlgorithm):
         
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
-        self.model = models.MaxViT(pretrained=False)
-        self.model.load_state_dict(torch.load('./best_model_fold0.pth', map_location=torch.device('cpu')))
-        self.model = self.model.to(self.device)
+        self.model_full = classifier_models.MaxViT(pretrained=False)
+        self.model_full.load_state_dict(torch.load('./weights_full_image.pth', map_location=torch.device('cpu')))
+        self.model_full = self.model_full.to(self.device)
+
+        self.model_cropped = classifier_models.MaxViT(pretrained=False)
+        self.model_cropped.load_state_dict(torch.load('./weights_cropped_image.pth', map_location=torch.device('cpu')))
+        self.model_cropped = self.model_cropped.to(self.device)
     
     def load(self):
         for key, file_loader in self._file_loaders.items():
@@ -123,20 +189,30 @@ class airogs_algorithm(ClassificationAlgorithm):
         # input_image_array = Image.fromarray(input_image_array)
         
         input_image_array = clahe(input_image_array)
-        input_image_array = Image.fromarray(input_image_array)
-        input_image_array = functional.to_tensor(input_image_array)
 
-        input_image_array = functional.crop(input_image_array, top, left, size, size)
+        result_dict = run_detection(input_image_array, self.device)
+        crop = Image.fromarray(result_dict['crop'])
+        if not result_dict['box_detected']:
+            classifier = self.model_full
+            crop = functional.crop(crop, top, left, size, size)
+        else:
+            classifier = self.model_cropped
+        crop = functional.resize(crop, size=(448,448))
+        # input_image_array = Image.fromarray(input_image_array)
+        # input_image_array = functional.to_tensor(input_image_array)
+
+        # input_image_array = functional.crop(input_image_array, top, left, size, size)
         
-        input_image_array = functional.resize(input_image_array, size=(448,448))
+        # input_image_array = functional.resize(input_image_array, size=(448,448))
         # input_image_array = torch.from_numpy(clahe(input_image_array.transpose(0,1).transpose(1,2).numpy())).reshape(1,3,224,224)
-        input_image_array = input_image_array.reshape(1,3,448,448)
-        pred = self.model(input_image_array.to(self.device))
+        crop = functional.to_tensor(crop)
+        crop = crop.reshape(1,3,448,448)
+        pred = classifier(crop.to(self.device))
         pred = F.softmax(pred, dim=1)
         rg_likelihood = pred[:,1]
         rg_binary = torch.argmax(pred[0]).bool()
-        ungradability_score = 0
-        ungradability_binary = False
+        ungradability_score = 1-result_dict['conf']+1-2*np.abs(0.5-rg_likelihood.item())
+        ungradability_binary = bool(ungradability_score>0.8)
         # From here, use the input_image to predict the output
         # We are using a not-so-smart algorithm to predict the output, you'll want to do your model inference here
 
@@ -153,6 +229,7 @@ class airogs_algorithm(ClassificationAlgorithm):
             "multiple-ungradability-scores": ungradability_score,
             "multiple-ungradability-binary": ungradability_binary
         }
+        print(out)
 
         return out
 
