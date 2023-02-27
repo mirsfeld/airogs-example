@@ -22,10 +22,10 @@ from evalutils.io import ImageLoader
 import cv2
 import os
 
-from yolov5.models.common import DetectMultiBackend
-from yolov5.utils.augmentations import letterbox
-from yolov5.utils.general import scale_boxes, non_max_suppression
-from yolov5.utils.plots import save_one_box
+from yolov5_1.models.common import DetectMultiBackend
+from yolov5_1.utils.augmentations import letterbox
+from yolov5_1.utils.general import scale_boxes, non_max_suppression
+from yolov5_1.utils.plots import save_one_box
 
 def hist_equalization(img):
     img = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
