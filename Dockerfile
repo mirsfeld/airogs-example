@@ -50,6 +50,7 @@ COPY --chown=algorithm:algorithm weights_cropped_image.pth /opt/algorithm/weight
 COPY --chown=algorithm:algorithm best.pt /opt/algorithm/best.pt
 COPY --chown=algorithm:algorithm classifier_models /opt/algorithm/classifier_models
 COPY --chown=algorithm:algorithm yolov5 /opt/algorithm/yolov5
+COPY --chown=algorithm:algorithm weights /opt/algorithm/weights
 
 # Copy additional files, such as model weights
 # e.g. `COPY --chown=algorithm:algorithm weights.pth /opt/algorithm/weights.pth`

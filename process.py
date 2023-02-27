@@ -33,6 +33,15 @@ def hist_equalization(img):
     img = cv2.cvtColor(img, cv2.COLOR_LAB2RGB)
     return img
 
+def get_model(model_path):
+    pretrained = ('pretrained' in model_path)
+    if 'maxvit' in model_path:
+        return classifier_models.MaxViT(input_channels=3, pretrained=pretrained), 1.25
+    elif 'resnet' in model_path:
+        return classifier_models.ResNet(pretrained=pretrained), 0.75
+    elif 'efficientnet' in model_path:
+        return classifier_models.EfficientNet(pretrained=pretrained), 1.25
+
 def run_detection(image, device):
     original_image = image.copy()
     image = letterbox(image, new_shape=(640,640))[0].transpose((2,0,1))[::-1]
@@ -43,12 +52,12 @@ def run_detection(image, device):
         image = image[None]
     model = DetectMultiBackend(weights='best.pt', device=torch.device(device), dnn=False, data=None, fp16=False)
     pred_0 = model(image, augment=False, visualize=False)
-    pred = non_max_suppression(pred_0, conf_thres=0.4, max_det=1)
+    pred = non_max_suppression(pred_0, conf_thres=0.1, max_det=1)
     det = pred[0]
     det[:, :4] = scale_boxes(image.shape[2:], det[:, :4], original_image.shape).round()
     if len(det):
         *xyxy, conf, cls = reversed(det)[0]
-        print('Confidence yolov5:', conf.item())
+        # print('Confidence yolov5:', conf.item())
         crop = save_one_box(xyxy, original_image, file='', BGR=False, pad=150, square=True, save=False)
         return {'crop': crop, 'conf': conf.item(), 'box_detected':True}
     else:
@@ -56,7 +65,7 @@ def run_detection(image, device):
         det = pred[0]
         det[:, :4] = scale_boxes(image.shape[2:], det[:, :4], original_image.shape).round()
         *xyxy, conf, cls = reversed(det)[0]
-        print('Confidence yolov5:', conf.item())
+        # print('Confidence yolov5:', conf.item())
         return {'crop': original_image, 'conf':conf.item(), 'box_detected':False}
 
 
@@ -84,8 +93,8 @@ def run_detection(image, device):
     #     return crop, conf
 
 def crop_parameters(img_arr):
-    indices_0 = np.where(np.any(img_arr!=0, axis=(1,2)))[0]
-    indices_1 = np.where(np.any(img_arr!=0, axis=(0,2)))[0]
+    indices_0 = np.where(np.any(img_arr>10, axis=(1,2)))[0]
+    indices_1 = np.where(np.any(img_arr>10, axis=(0,2)))[0]
     
     h, w = indices_0[-1]-indices_0[0], indices_1[-1]-indices_1[0]
     # tuple of shape top, left, height, width
@@ -140,6 +149,40 @@ class airogs_algorithm(ClassificationAlgorithm):
         self.model_cropped = classifier_models.MaxViT(pretrained=False)
         self.model_cropped.load_state_dict(torch.load('./weights_cropped_image.pth', map_location=torch.device('cpu')))
         self.model_cropped = self.model_cropped.to(self.device)
+
+        model_paths = [
+            # './log_data_augm/swintransformer_clahe_20epochs_lr5e-05_adamw_constant/best_model_fold0.pth',
+            # './log_data_augm/swintransformer_clahe_20epochs_lr5e-05_adamw_constant/best_model_fold1.pth',
+            # './log_data_augm/swintransformer_clahe_20epochs_lr5e-05_adamw_constant/best_model_fold2.pth',
+            # './log_data_augm/swintransformer_clahe_20epochs_lr5e-05_adamw_constant/best_model_fold3.pth',
+            # './log_data_augm/maxvit_clahe_20epochs_lr5e-05_adamw_constant/best_model_fold0.pth',
+            # './log_data_augm/maxvit_clahe_20epochs_lr5e-05_adamw_constant/best_model_fold1.pth',
+            # './log_data_augm/maxvit_clahe_20epochs_lr5e-05_adamw_constant/best_model_fold2.pth',
+            # './log_data_augm/maxvit_clahe_20epochs_lr5e-05_adamw_constant/best_model_fold3.pth',
+            './weights/maxvit_clahe_20epochs_lr1e-05_adamw_linear_pretrained/best_model_fold0.pth',
+            './weights/maxvit_clahe_20epochs_lr1e-05_adamw_linear_pretrained/best_model_fold1.pth',
+            './weights/maxvit_clahe_20epochs_lr1e-05_adamw_linear_pretrained/best_model_fold2.pth',
+            './weights/maxvit_clahe_20epochs_lr1e-05_adamw_linear_pretrained/best_model_fold3.pth',
+            './weights/maxvit_clahe_20epochs_lr1e-05_adamw_linear_pretrained/best_model_fold4.pth',
+            './weights/resnet50_clahe_20epochs_lr1e-05_adamw_exponential/best_model_fold0.pth',
+            './weights/resnet50_clahe_20epochs_lr1e-05_adamw_exponential/best_model_fold1.pth',
+            './weights/resnet50_clahe_20epochs_lr1e-05_adamw_exponential/best_model_fold2.pth',
+            './weights/resnet50_clahe_20epochs_lr1e-05_adamw_exponential/best_model_fold3.pth',
+            './weights/efficientnet_clahe_20epochs_lr0.0001_adamw_linear/best_model_fold0.pth',
+            './weights/efficientnet_clahe_20epochs_lr0.0001_adamw_linear/best_model_fold1.pth',
+            './weights/efficientnet_clahe_20epochs_lr0.0001_adamw_linear/best_model_fold2.pth',
+            './weights/efficientnet_clahe_20epochs_lr0.0001_adamw_linear/best_model_fold3.pth',
+            './weights/efficientnet_clahe_20epochs_lr0.0001_adamw_linear/best_model_fold4.pth'
+        ]
+        self.model_dict = {
+        'model': [],
+        'weight': []
+        }
+        for path in model_paths:
+            model, weight  = get_model(path)
+            model.load_state_dict(torch.load(path, map_location='cpu'))
+            self.model_dict['model'].append(model.to(self.device))
+            self.model_dict['weight'].append(weight)
     
     def load(self):
         for key, file_loader in self._file_loaders.items():
@@ -207,12 +250,15 @@ class airogs_algorithm(ClassificationAlgorithm):
         # input_image_array = torch.from_numpy(clahe(input_image_array.transpose(0,1).transpose(1,2).numpy())).reshape(1,3,224,224)
         crop = functional.to_tensor(crop)
         crop = crop.reshape(1,3,448,448)
-        pred = classifier(crop.to(self.device))
-        pred = F.softmax(pred, dim=1)
+        tmp = torch.stack([self.model_dict['weight'][i]*F.softmax(self.model_dict['model'][i](crop.to(self.device)), dim=1) for i in range(len(self.model_dict['model']))])
+        # print(tmp.shape)
+        pred = torch.mean(tmp, dim=0)
+        # pred = classifier(crop.to(self.device))
+        # pred = F.softmax(pred, dim=1)
         rg_likelihood = pred[:,1]
-        rg_binary = torch.argmax(pred[0]).bool()
-        ungradability_score = 1-result_dict['conf']+1-2*np.abs(0.5-rg_likelihood.item())
-        ungradability_binary = bool(ungradability_score>0.8)
+        rg_binary = (rg_likelihood>2/3)
+        ungradability_score = 1-result_dict['conf']
+        ungradability_binary = bool(ungradability_score>0.5)
         # From here, use the input_image to predict the output
         # We are using a not-so-smart algorithm to predict the output, you'll want to do your model inference here
 
@@ -229,7 +275,7 @@ class airogs_algorithm(ClassificationAlgorithm):
             "multiple-ungradability-scores": ungradability_score,
             "multiple-ungradability-binary": ungradability_binary
         }
-        print(out)
+        # print(out)
 
         return out
 

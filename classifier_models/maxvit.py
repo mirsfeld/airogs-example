@@ -13,6 +13,7 @@ class MaxViT(torchvision.models.MaxVit):
             # model = timm.models.maxxvit.maxvit_rmlp_small_rw_224(pretrained=True, num_classes=2)
             # model = torchvision.models.maxvit_t(weights=torchvision.models.MaxVit_T_Weights.DEFAULT)
             model = torchvision.models.maxvit_t(weights=None)
+            model.stem.insert(0, nn.Conv2d(input_channels, input_channels, kernel_size=2, stride=2))
             # for block in model.blocks[:-1]:
             #     for param in block.parameters():
             #         param.requires_grad = False
